@@ -1,0 +1,16 @@
+cd '/home/emre/Desktop/77ghz/open_radar/open_radar_initiative-new_receive_test/open_radar_initiative-new_receive_test/setup_radar/build'
+
+sudo ./setup_radar
+
+----
+
+cd /home/emre/Desktop/77ghz/CLI/Release
+
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$pwd
+
+./DCA1000EVM_CLI_Control fpga cf.json
+./DCA1000EVM_CLI_Control record cf.json
+./DCA1000EVM_CLI_Control start_record cf.json
+./DCA1000EVM_CLI_Control stop_record cf.json
+
+
