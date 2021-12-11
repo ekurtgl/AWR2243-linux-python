@@ -1,8 +1,8 @@
 import numpy as np
 from helpers import stft
 
-main_path = '/home/emre/Desktop/77ghz/open radar/temp/data/'
-fname = main_path + 'mm_complex_walk_Raw_0.bin'
+main_path = '/home/emre/Desktop/77ghz/open_radar/temp/data/my_receiver/'
+fname = main_path + '2021_12_11_16_33_29.bin'
 
 f = open(fname)
 data = np.fromfile(f, dtype=np.int16)
@@ -22,7 +22,7 @@ NoF = round(numChirps / NPpF)
 dT = SweepTime / NPpF
 prf = 1 / dT
 isReal = 0
-duration = np.ceil(numChirps*dT)
+duration = numChirps*dT
 
 # zero pad
 zerostopad = int(NTS*numChirps*numRX*2-len(data))
@@ -38,7 +38,7 @@ data = data.reshape(NTS, numChirps, numRX, order='F')
 rp = np.fft.fft(data)
 
 # micro-Doppler Spectrogram
-rBin = np.arange(15, 56)
+rBin = np.arange(15, 30)
 nfft = 2**12
 window = 256
 noverlap = 200
@@ -58,7 +58,7 @@ if save_spectrograms:
     savename = fname[:-4] + '_py.png'
 
     maxval = np.max(sx2)
-    norm = colors.Normalize(vmin=-55, vmax=None, clip=True)
+    norm = colors.Normalize(vmin=-45, vmax=None, clip=True)
 
     # imwrite (no axes)
     # ax.imshow(20 * np.log10((abs(sx2) / maxval)), cmap='jet', norm=norm, aspect="auto",
@@ -76,6 +76,6 @@ if save_spectrograms:
               extent=[0, duration, -prf/2, prf/2])
     plt.xlabel('Time (sec)')
     plt.ylabel('Frequency (Hz)')
-    plt.ylim([-prf/6, prf/6])
-    plt.title('Complex mmwave walk python')
+    # plt.ylim([-prf/6, prf/6])
+    plt.title('Complex my_param CLI-openradar asl python process_complex')
     fig.savefig(savename, dpi=200)
