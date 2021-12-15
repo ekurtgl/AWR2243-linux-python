@@ -98,9 +98,9 @@ import threading
 
 
 class my_UDP_Receiver(threading.Thread):
-    def __init__(self,is_running_event, output_pipe, static_ip='192.168.33.30', adc_ip='192.168.33.180',
-                 data_port=4098,n_chirps=255,n_rx=4,n_tx=1,n_samples=256, isComplex=0):
-        threading.Thread.__init__ (self)
+    def __init__(self, is_running_event, output_pipe, static_ip='192.168.33.30', adc_ip='192.168.33.180',
+                 data_port=4098, n_chirps=255, n_rx=4, n_tx=1, n_samples=256, isComplex=0):
+        threading.Thread.__init__(self)
         # Create configuration and data destinations
         self.is_running_event = is_running_event
         self.output_pipe = output_pipe
@@ -120,17 +120,16 @@ class my_UDP_Receiver(threading.Thread):
         self.curr_buff = None
         self.last_frame = None
         self.lost_packets = None
-        self.BYTES_IN_PACKET = 1456
+        self.BYTES_IN_PACKET = 1456  # ref cli sw dev guide
 
         self.adc_parameters = {'chirps': n_chirps,  # 32
-                          'rx': n_rx,
-                          'tx': n_tx,
-                          'samples': n_samples,
-                          'bytes': 2,
+                               'rx': n_rx,
+                               'tx': n_tx,
+                               'samples': n_samples,
+                               'bytes': 2,
                                'complex': isComplex}
 
         # DYNAMIC
-        # self.bytes_per_frame = (self.adc_parameters['chirps'] * self.adc_parameters['rx'] * self.adc_parameters['tx'] * self.adc_parameters['samples'] * self.adc_parameters['bytes'])
         self.bytes_per_frame = (self.adc_parameters['chirps'] * self.adc_parameters['rx'] * self.adc_parameters['tx'] *
                                 self.adc_parameters['samples'] * self.adc_parameters['bytes'] *
                                 self.adc_parameters['complex'])
@@ -138,43 +137,52 @@ class my_UDP_Receiver(threading.Thread):
         self.packets_in_frame = self.bytes_per_frame / self.BYTES_IN_PACKET
         self.PACKETS_IN_FRAME_CLIPPED = self.bytes_per_frame // self.BYTES_IN_PACKET
         self.uint16_in_packet = self.BYTES_IN_PACKET // 2
+        # print('self.uint16_in_packet', self.uint16_in_packet)  # , 728*258 =260624
         self.uint16_in_frame = self.bytes_per_frame // 2
+        # print('self.uint16_in_frame', self.uint16_in_frame)  # 261120, 0.19148284313% lose
         self.ret_frame = np.zeros(self.uint16_in_frame, dtype=np.int16)
-
 
     def close(self):
         self.data_socket.close()
 
     def run(self):
         self.read()
-        print("UDP receiver quit!")
+        # print("UDP receiver quit!")
 
     def read(self, timeout=1):
         # Wait for start of next frame
-        while (self.is_running_event.is_set()):
+        # ct = 0
+        while self.is_running_event.is_set():
 
             data, addr = self.data_socket.recvfrom(4096)
             byte_count = struct.unpack('>Q', b'\x00\x00' + data[4:10][::-1])[0]
-            packet_data = np.frombuffer(data[10:], dtype=np.uint16)
+            packet_data = np.frombuffer(data[10:], dtype=np.int16)
+            # packet_data = np.frombuffer(data[4:], dtype=np.int16)
 
             # print(byte_count - last_byte_count)
-            if byte_count % self.bytes_in_frame == 0:
-                packets_read = 1
+            # ct += 1
+            if byte_count % self.bytes_in_frame == 0:  # byte_count = 23344612928
+                # print('byte_count:', byte_count)
+                # print('ct:', ct)
                 self.ret_frame[0:self.uint16_in_packet] = packet_data
+                # self.ret_frame[0:self.uint16_in_packet+3] = packet_data
                 break
 
         # Read in the rest of the frame
-        while (self.is_running_event.is_set()):
-            #Read the packet
+        while self.is_running_event.is_set():
+            # Read the packet
             data, addr = self.data_socket.recvfrom(4096)
             sequence_number = struct.unpack('<1l', data[:4])[0]
             curr_idx = ((sequence_number - 1) % self.PACKETS_IN_FRAME_CLIPPED)
 
-            if sequence_number % self.PACKETS_IN_FRAME_CLIPPED == 0 :
-            # if  curr_idx==0:
+            if sequence_number % self.PACKETS_IN_FRAME_CLIPPED == 0:
+                # if  curr_idx==0:
                 self.output_pipe.send(self.ret_frame)
-
-            self.ret_frame[curr_idx * self.uint16_in_packet:(curr_idx + 1) * self.uint16_in_packet] = np.frombuffer(data[10:], dtype=np.uint16)
+            # print('curr_idx:', curr_idx)  # 0-357
+            self.ret_frame[curr_idx * self.uint16_in_packet:(curr_idx + 1) * self.uint16_in_packet] = np.frombuffer(
+                data[10:], dtype=np.int16)
+        # self.ret_frame[curr_idx * self.uint16_in_packet+3:(curr_idx + 1) * self.uint16_in_packet+6] = np.frombuffer(
+        #     data[4:], dtype=np.int16)
 
 
 class my_UDP_Receiver2(threading.Thread):
@@ -188,7 +196,7 @@ class my_UDP_Receiver2(threading.Thread):
         # Create sockets)
         self.data_socket = socket.socket(socket.AF_INET,
                                          socket.SOCK_DGRAM,
-                                         0)  # socket.IPPROTO_UDP
+                                         socket.IPPROTO_UDP)  # socket.IPPROTO_UDP
         # Bind data socket to fpga
         self.data_socket.bind(self.data_recv)
 
