@@ -1,4 +1,5 @@
-from helpers import my_UDP_Receiver, radar_sample_writer
+import sys
+from helpers import my_UDP_Receiver, radar_sample_writer, fig2img
 import numpy as np
 import threading
 from multiprocessing import Pipe
@@ -50,7 +51,7 @@ if __name__ == '__main__':
             # logging_header[-1] = time.mktime(timestamp.timetuple()) * 1e3 + timestamp.microsecond / 1e3
             # logger.writeNextSample(logging_header, np_raw_frame)
             logger.writeNextSample(np_raw_frame)
-            print(timestamp - last_timestamp)
+            # print(timestamp - last_timestamp)
             last_timestamp = timestamp
             cnt += 1
 
@@ -96,40 +97,49 @@ if __name__ == '__main__':
                 data = data.T
                 data = data.reshape(numADCSamples, numChirps, numRxAntennas, order='F')
                 # print('Data:', data.shape)
-
-                # rd_frame = data[:, :, 0] - np.mean(data[:, :, 0], 1)
-                rd_frame = data
-                rd_frame = np.fft.fftshift(np.fft.fft2(rd_frame, axes=(0, 1)), 1)
+                # print(data[:, :, 0].shape)
+                # print(np.mean(data[:, :, 0], 1).shape)
+                rd_frame = data[:, :, 0].T - np.mean(data[:, :, 0], 1)
+                # rd_frame = data[:, :, 0]
+                rd_frame = np.fft.fftshift(np.fft.fft2(rd_frame.T, axes=(0, 1)), 1)
                 maxval = np.max(np.abs(rd_frame))
-                norm = colors.Normalize(vmin=-35, vmax=None, clip=True)
 
                 if cnt == 1:
+                    norm_pool = np.zeros((256, 254))
+
                     fig = plt.figure()
+                    vmin = 190
+                    vmax = None
+                    norm = colors.Normalize(vmin=vmin, vmax=vmax, clip=False)
                     im = plt.imshow((20 * np.log10((np.abs(rd_frame) / maxval))).astype(np.uint8), cmap='jet',
                                     norm=norm, aspect="auto", extent=[-velmax, velmax, 0, Rmax])
                     plt.xlabel('Velocity (m/s)')
                     plt.ylabel('Range (m)')
                     plt.title('Range-Doppler map')
                     plt.ylim([rangelim, 0])
+                    plt.colorbar()
                     plt.draw()
                     plt.pause(1e-3)
                     if save_rd_map:
                         import cv2
                         from PIL import Image
 
-                        fps = int(1/SweepTime)
+                        fps = int(1 / SweepTime)
                         size = im.get_array().shape[:2]
                         out = cv2.VideoWriter(filename.replace('bin', 'avi'),
                                               cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
-                                              fps, (size[1], size[0]))
-                        out.write(cv2.cvtColor(im.get_array(), cv2.COLOR_RGB2BGR))
+                                              fps, (size[1], size[0]), isColor=1)
+                        out.write(cv2.applyColorMap(im.get_array(), cv2.COLORMAP_JET))
                 else:
+                    if not plt.fignum_exists(1):
+                        sys.exit('Figure closed, hence stopped.')
                     im.set_data((20 * np.log10((np.abs(rd_frame) / maxval))).astype(np.uint8))
                     plt.draw()
                     # plt.show()
                     plt.pause(1e-3)
                     if save_rd_map:
-                        out.write(cv2.cvtColor(im.get_array(), cv2.COLOR_RGB2BGR))
+                        out.write(cv2.applyColorMap(im.get_array(), cv2.COLORMAP_JET))
+
     except KeyboardInterrupt:
         print('Stopped by keyboard interrupt')
     out.release()
