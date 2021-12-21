@@ -1,0 +1,14 @@
+cd '/home/emre/Desktop/77ghz/open_radar/open_radar_initiative-new_receive_test/open_radar_initiative-new_receive_test/setup_dca_1000/build'
+
+sudo ./setup_dca_1000
+
+cd '/home/emre/Desktop/77ghz/open_radar/open_radar_initiative-new_receive_test/open_radar_initiative-new_receive_test/setup_radar/build'
+
+sudo ./setup_radar
+
+# in new cmd
+python ../../processing/main2.py
+
+# my main
+python /home/emre/PycharmProjects/pythonProject/main_record.py
+
