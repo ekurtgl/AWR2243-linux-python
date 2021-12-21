@@ -1,5 +1,5 @@
 import sys
-from helpers import my_UDP_Receiver, radar_sample_writer, fig2img
+from helpers import my_UDP_Receiver, radar_sample_writer
 import numpy as np
 import threading
 from multiprocessing import Pipe
@@ -96,16 +96,12 @@ if __name__ == '__main__':
                 data = data[0:4, :] + data[4:8, :] * 1j
                 data = data.T
                 data = data.reshape(numADCSamples, numChirps, numRxAntennas, order='F')
-                # print('Data:', data.shape)
-                # print(data[:, :, 0].shape)
-                # print(np.mean(data[:, :, 0], 1).shape)
+
                 rd_frame = data[:, :, 0].T - np.mean(data[:, :, 0], 1)
-                # rd_frame = data[:, :, 0]
                 rd_frame = np.fft.fftshift(np.fft.fft2(rd_frame.T, axes=(0, 1)), 1)
                 maxval = np.max(np.abs(rd_frame))
 
                 if cnt == 1:
-                    norm_pool = np.zeros((256, 254))
 
                     fig = plt.figure()
                     vmin = 190
@@ -124,21 +120,30 @@ if __name__ == '__main__':
                         import cv2
                         from PIL import Image
 
+                        norm_pool = np.zeros((256, 254))
                         fps = int(1 / SweepTime)
                         size = im.get_array().shape[:2]
                         out = cv2.VideoWriter(filename.replace('bin', 'avi'),
                                               cv2.VideoWriter_fourcc('M', 'J', 'P', 'G'),
                                               fps, (size[1], size[0]), isColor=1)
-                        out.write(cv2.applyColorMap(im.get_array(), cv2.COLORMAP_JET))
+                        final = im.get_array()
+                        final[final < vmin] = vmin
+                        final = cv2.applyColorMap(cv2.normalize(final, None, vmin,
+                                                                None, cv2.NORM_MINMAX), cv2.COLORMAP_JET)
+                        out.write(final)
+
                 else:
                     if not plt.fignum_exists(1):
                         sys.exit('Figure closed, hence stopped.')
                     im.set_data((20 * np.log10((np.abs(rd_frame) / maxval))).astype(np.uint8))
                     plt.draw()
-                    # plt.show()
                     plt.pause(1e-3)
                     if save_rd_map:
-                        out.write(cv2.applyColorMap(im.get_array(), cv2.COLORMAP_JET))
+                        final = im.get_array()
+                        final[final < vmin] = vmin
+                        final = cv2.applyColorMap(cv2.normalize(final, None, vmin,
+                                                                None, cv2.NORM_MINMAX), cv2.COLORMAP_JET)
+                        out.write(final)
 
     except KeyboardInterrupt:
         print('Stopped by keyboard interrupt')
