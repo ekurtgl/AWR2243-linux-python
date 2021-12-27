@@ -1,5 +1,5 @@
 import sys
-from helpers import my_UDP_Receiver, radar_sample_writer
+from helpers import my_UDP_Receiver, radar_sample_writer, stft
 import numpy as np
 import threading
 from multiprocessing import Pipe
@@ -15,10 +15,10 @@ SweepTime = 40e-3
 sampleFreq = 6.25e6
 
 isComplex = 2  # 1 for real, 2 for complex
-plot_rangedoppler = 1
-save_rd_map = 1
+plot_rangedoppler = 0
+save_rd_map = 0
 rangelim = 4  # in meters
-plot_microdoppler = 0
+plot_microdoppler = 1
 
 numChirpsPerFrame = numTxAntennas * numLoopsPerFrame
 
@@ -55,33 +55,35 @@ if __name__ == '__main__':
             last_timestamp = timestamp
             cnt += 1
 
+            if cnt == 1:
+                # params
+                idletime = 100e-6
+                adcStartTime = 5e-6
+                rampEndTime = 50e-6
+                c = 299792458
+                slope = 80e12
+                fstart = 77e9
+                Bw = 4e9
+                fstop = fstart + Bw
+                fc = (fstart + fstop) / 2
+                lamda = c / fc
+                Rmax = sampleFreq * c / (2 * slope)
+                Tc = idletime + adcStartTime + rampEndTime
+                Tf = SweepTime
+                dT = SweepTime / NPpF
+                prf = 1 / dT
+                velmax = lamda / (Tc * 4)
+                DFmax = velmax / (c / fc / 2)
+                rResol = c / (2 * Bw)
+                vResol = lamda / (2 * Tf)
+                RNGD2_GRID = np.linspace(0, Rmax, numADCSamples)
+                DOPP_GRID = np.linspace(DFmax, -DFmax, numLoopsPerFrame)
+                V_GRID = (c / fc / 2) * DOPP_GRID
+                md_plot_len = 2  # sec
+
             if plot_rangedoppler:
                 from matplotlib import colors
                 import matplotlib.pyplot as plt
-
-                if cnt == 1:
-
-                    # params
-                    idletime = 100e-6
-                    adcStartTime = 5e-6
-                    rampEndTime = 50e-6
-                    c = 299792458
-                    slope = 80e12
-                    fstart = 77e9
-                    Bw = 4e9
-                    fstop = fstart + Bw
-                    fc = (fstart + fstop) / 2
-                    lamda = c / fc
-                    Rmax = sampleFreq * c / (2 * slope)
-                    Tc = idletime + adcStartTime + rampEndTime
-                    Tf = SweepTime
-                    velmax = lamda / (Tc * 4)
-                    DFmax = velmax / (c / fc / 2)
-                    rResol = c / (2 * Bw)
-                    vResol = lamda / (2 * Tf)
-                    RNGD2_GRID = np.linspace(0, Rmax, numADCSamples)
-                    DOPP_GRID = np.linspace(DFmax, -DFmax, numLoopsPerFrame)
-                    V_GRID = (c / fc / 2) * DOPP_GRID
 
                 data = np.array(np_raw_frame, dtype=np.int16)
                 numChirps = int(np.ceil(len(data) / 2 / numADCSamples / numRxAntennas))
@@ -144,6 +146,79 @@ if __name__ == '__main__':
                         final = cv2.applyColorMap(cv2.normalize(final, None, vmin,
                                                                 None, cv2.NORM_MINMAX), cv2.COLORMAP_JET)
                         out.write(final)
+
+            if plot_microdoppler:
+                from matplotlib import colors
+                import matplotlib.pyplot as plt
+
+                data = np.array(np_raw_frame, dtype=np.int16)
+                numChirps = int(np.ceil(len(data) / 2 / numADCSamples / numRxAntennas))
+
+                # zero pad
+                zerostopad = int(numADCSamples * numChirps * numRxAntennas * 2 - len(data))
+                data = np.concatenate([data, np.zeros((zerostopad,))])
+                # print('zeropad:', zerostopad)
+
+                # Organize data per RX
+                data = data.reshape(numRxAntennas * 2, -1, order='F')
+                data = data[0:4, :] + data[4:8, :] * 1j
+                data = data.T
+                data = data.reshape(numADCSamples, numChirps, numRxAntennas, order='F')
+                data = np.fft.fft(data[:, :, 0])
+
+                if cnt == 1:
+                    # params
+                    rBin = np.arange(15, 18)
+                    nfft = 2 ** 9  # 12
+                    window = 256
+                    noverlap = 100  # 200
+                    shift = window - noverlap
+
+                    data_whole = np.zeros((numADCSamples, md_plot_len * NPpF * int(1/SweepTime)),
+                                          dtype='complex')
+                    data_whole[:, -numChirps:] = data
+                    print('data_whole part', data_whole[:, -numChirps:].shape)
+                    print('maxdata', np.max(np.abs(data)))
+                    y2 = np.sum(data_whole[rBin, :], 0)
+                    print('max_y2', np.max(np.abs(y2)))
+                    sx = stft(np.expand_dims(y2, -1), window, nfft, shift)
+                    print('max_sx', np.max(np.abs(sx)))
+                    sx2 = np.abs((np.fft.fftshift(sx, 0)))
+                    print('max_sx2', np.max(sx2))
+
+                    maxval = np.max(sx2)
+                    norm = colors.Normalize(vmin=-35, vmax=None, clip=True)
+
+                    fig = plt.figure()
+
+                    print('cnt: ', cnt)
+                    print('y2', y2.shape)
+                    print('max: ', maxval)
+
+                    im = plt.imshow((20 * np.log10((abs(sx2) / maxval))).astype(np.uint8), cmap='jet', norm=norm, aspect="auto",
+                                    extent=[0, md_plot_len, -prf/2, prf/2])
+                    plt.xlabel('Time (sec)')
+                    plt.ylabel('Frequency (Hz)')
+                    # plt.ylim([-prf/6, prf/6])
+                    plt.title('Live Micro-Doppler Spectrogram')
+                    plt.draw()
+                    plt.pause(1e-2)
+
+                else:
+                    if not plt.fignum_exists(1):
+                        sys.exit('Figure closed, hence stopped.')
+                    data_whole = np.roll(data_whole, numChirps, 1)
+                    data_whole[:, -numChirps:] = data
+                    y2 = np.sum(data_whole[rBin, :], 0)
+                    sx = stft(np.expand_dims(y2, -1), window, nfft, shift)
+                    sx2 = np.abs((np.fft.fftshift(sx, 0)))
+                    maxval = np.max(sx2)
+                    print('cnt: ', cnt)
+                    print('max: ', maxval)
+
+                    im.set_data((20 * np.log10((np.abs(sx2) / maxval))).astype(np.uint8))
+                    plt.draw()
+                    plt.pause(1e-2)
 
     except KeyboardInterrupt:
         print('Stopped by keyboard interrupt')
