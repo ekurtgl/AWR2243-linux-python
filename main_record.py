@@ -156,7 +156,8 @@ if __name__ == '__main__':
 
                 # zero pad
                 zerostopad = int(numADCSamples * numChirps * numRxAntennas * 2 - len(data))
-                data = np.concatenate([data, np.zeros((zerostopad,))])
+                if zerostopad:
+                    data = np.concatenate([data, np.zeros((zerostopad,))])
                 # print('zeropad:', zerostopad)
 
                 # Organize data per RX
@@ -164,26 +165,32 @@ if __name__ == '__main__':
                 data = data[0:4, :] + data[4:8, :] * 1j
                 data = data.T
                 data = data.reshape(numADCSamples, numChirps, numRxAntennas, order='F')
-                data = np.fft.fft(data[:, :, 0])
+                # data = np.fft.fft(data[:, :, 0])
 
                 if cnt == 1:
                     # params
                     rBin = np.arange(15, 18)
-                    nfft = 2 ** 10  # 12
+                    nfft = 2 ** 9  # 12
                     window = 256
-                    noverlap = 128  # 200
+                    noverlap = 200  # 200
                     shift = window - noverlap
 
                     data_whole = np.zeros((numADCSamples, md_plot_len * NPpF * int(1/SweepTime)),
                                           dtype='complex')
-                    data_whole[:, -numChirps:] = data
+                    data_whole[:, -numChirps:] = data[:, :, 0]
                     print('data_whole part', data_whole[:, -numChirps:].shape)
+                    # rp = np.fft.fftshift(np.fft.fft(data_whole), 1)
+                    rp = np.fft.fft(data_whole)
+                    print(rp.shape)
                     # print('maxdata', np.max(np.abs(data)))
-                    y2 = np.sum(data_whole[rBin, :], 0)
+                    y2 = np.sum(rp[rBin, :], 0)
                     # print('max_y2', np.max(np.abs(y2)))
-                    sx = stft(np.expand_dims(y2, -1), window, nfft, shift)
+                    # sx = stft(np.expand_dims(y2, -1), window, nfft, shift)
+                    sx = stft(y2, window, nfft, shift)
                     # print('max_sx', np.max(np.abs(sx)))
-                    sx2 = np.abs((np.fft.fftshift(sx, 0)))
+                    # sx2 = np.abs((np.fft.fftshift(sx, 0)))
+                    sx2 = np.flip(np.abs((np.fft.fftshift(sx, 1))).T, -1)
+                    # sx2 = np.abs(sx).T
                     # print('max_sx2', np.max(sx2))
 
                     maxval = np.max(sx2)
@@ -195,8 +202,8 @@ if __name__ == '__main__':
                     # print('y2', y2.shape)
                     # print('max: ', maxval)
 
-                    im = plt.imshow((20 * np.log10(sx2 / maxval)).astype(np.uint8), cmap='jet', norm=norm, aspect="auto",
-                                    extent=[-md_plot_len, 0, -prf/2, prf/2])
+                    im = plt.imshow((20 * np.log10(sx2 / maxval)).astype(np.uint8), cmap='jet', norm=norm,
+                                    aspect="auto", extent=[-md_plot_len, 0, -prf/2, prf/2])
                     plt.xlabel('Time (sec)')
                     plt.ylabel('Frequency (Hz)')
                     # plt.ylim([-prf/6, prf/6])
@@ -208,13 +215,18 @@ if __name__ == '__main__':
                 else:
                     if not plt.fignum_exists(1):
                         sys.exit('Figure closed, hence stopped.')
-                    data_whole[:, : - numChirps] = data_whole[:, numChirps:]
-                    data_whole[:, -numChirps:] = data
-                    y2 = np.sum(data_whole[rBin, :], 0)
-                    sx = stft(np.expand_dims(y2, -1), window, nfft, shift)
-                    sx2 = np.abs((np.fft.fftshift(sx, 0)))
+                    data_whole[:, : -numChirps] = data_whole[:, numChirps:]
+                    data_whole[:, -numChirps:] = data[:, :, 0]
+                    # rp = np.fft.fftshift(np.fft.fft(data_whole), 1)
+                    rp = np.fft.fft(data_whole)
+                    y2 = np.sum(rp[rBin, :], 0)
+                    # sx = stft(np.expand_dims(y2, -1), window, nfft, shift)
+                    sx = stft(y2, window, nfft, shift)
+                    sx2 = np.flip(np.abs((np.fft.fftshift(sx, 1))).T, -1)
+                    # sx2 = np.abs(sx)
                     maxval = np.max(sx2)
                     print('cnt: ', cnt)
+                    print(sx2.shape)
                     # print('max: ', maxval)
                     # print('maxim, ', np.max((20 * np.log10(sx2 / maxval)).astype(np.uint8)))
 
