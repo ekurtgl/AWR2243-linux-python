@@ -169,56 +169,58 @@ if __name__ == '__main__':
                 if cnt == 1:
                     # params
                     rBin = np.arange(15, 18)
-                    nfft = 2 ** 9  # 12
+                    nfft = 2 ** 10  # 12
                     window = 256
-                    noverlap = 100  # 200
+                    noverlap = 128  # 200
                     shift = window - noverlap
 
                     data_whole = np.zeros((numADCSamples, md_plot_len * NPpF * int(1/SweepTime)),
                                           dtype='complex')
                     data_whole[:, -numChirps:] = data
                     print('data_whole part', data_whole[:, -numChirps:].shape)
-                    print('maxdata', np.max(np.abs(data)))
+                    # print('maxdata', np.max(np.abs(data)))
                     y2 = np.sum(data_whole[rBin, :], 0)
-                    print('max_y2', np.max(np.abs(y2)))
+                    # print('max_y2', np.max(np.abs(y2)))
                     sx = stft(np.expand_dims(y2, -1), window, nfft, shift)
-                    print('max_sx', np.max(np.abs(sx)))
+                    # print('max_sx', np.max(np.abs(sx)))
                     sx2 = np.abs((np.fft.fftshift(sx, 0)))
-                    print('max_sx2', np.max(sx2))
+                    # print('max_sx2', np.max(sx2))
 
                     maxval = np.max(sx2)
-                    norm = colors.Normalize(vmin=-35, vmax=None, clip=True)
+                    norm = colors.Normalize(vmin=220, vmax=None, clip=True)
 
                     fig = plt.figure()
 
-                    print('cnt: ', cnt)
-                    print('y2', y2.shape)
-                    print('max: ', maxval)
+                    # print('cnt: ', cnt)
+                    # print('y2', y2.shape)
+                    # print('max: ', maxval)
 
-                    im = plt.imshow((20 * np.log10((abs(sx2) / maxval))).astype(np.uint8), cmap='jet', norm=norm, aspect="auto",
-                                    extent=[0, md_plot_len, -prf/2, prf/2])
+                    im = plt.imshow((20 * np.log10(sx2 / maxval)).astype(np.uint8), cmap='jet', norm=norm, aspect="auto",
+                                    extent=[-md_plot_len, 0, -prf/2, prf/2])
                     plt.xlabel('Time (sec)')
                     plt.ylabel('Frequency (Hz)')
                     # plt.ylim([-prf/6, prf/6])
                     plt.title('Live Micro-Doppler Spectrogram')
+                    plt.colorbar()
                     plt.draw()
-                    plt.pause(1e-2)
+                    plt.pause(1e-3)
 
                 else:
                     if not plt.fignum_exists(1):
                         sys.exit('Figure closed, hence stopped.')
-                    data_whole = np.roll(data_whole, numChirps, 1)
+                    data_whole[:, : - numChirps] = data_whole[:, numChirps:]
                     data_whole[:, -numChirps:] = data
                     y2 = np.sum(data_whole[rBin, :], 0)
                     sx = stft(np.expand_dims(y2, -1), window, nfft, shift)
                     sx2 = np.abs((np.fft.fftshift(sx, 0)))
                     maxval = np.max(sx2)
                     print('cnt: ', cnt)
-                    print('max: ', maxval)
+                    # print('max: ', maxval)
+                    # print('maxim, ', np.max((20 * np.log10(sx2 / maxval)).astype(np.uint8)))
 
-                    im.set_data((20 * np.log10((np.abs(sx2) / maxval))).astype(np.uint8))
+                    im.set_data((20 * np.log10(sx2 / maxval)).astype(np.uint8))
                     plt.draw()
-                    plt.pause(1e-2)
+                    plt.pause(1e-3)
 
     except KeyboardInterrupt:
         print('Stopped by keyboard interrupt')
