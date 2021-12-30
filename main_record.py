@@ -18,7 +18,8 @@ isComplex = 2  # 1 for real, 2 for complex
 plot_rangedoppler = 0
 save_rd_map = 0
 rangelim = 4  # in meters
-plot_microdoppler = 1
+plot_microdoppler = 0
+plot_motion = 1
 
 numChirpsPerFrame = numTxAntennas * numLoopsPerFrame
 
@@ -197,11 +198,6 @@ if __name__ == '__main__':
                     norm = colors.Normalize(vmin=220, vmax=None, clip=True)
 
                     fig = plt.figure()
-
-                    # print('cnt: ', cnt)
-                    # print('y2', y2.shape)
-                    # print('max: ', maxval)
-
                     im = plt.imshow((20 * np.log10(sx2 / maxval)).astype(np.uint8), cmap='jet', norm=norm,
                                     aspect="auto", extent=[-md_plot_len, 0, -prf/2, prf/2])
                     plt.xlabel('Time (sec)')
@@ -225,7 +221,7 @@ if __name__ == '__main__':
                     sx2 = np.flip(np.abs((np.fft.fftshift(sx, 1))).T, -1)
                     # sx2 = np.abs(sx)
                     maxval = np.max(sx2)
-                    print('cnt: ', cnt)
+                    print('frame: ', cnt)
                     print(sx2.shape)
                     # print('max: ', maxval)
                     # print('maxim, ', np.max((20 * np.log10(sx2 / maxval)).astype(np.uint8)))
@@ -233,6 +229,53 @@ if __name__ == '__main__':
                     im.set_data((20 * np.log10(sx2 / maxval)).astype(np.uint8))
                     plt.draw()
                     plt.pause(1e-3)
+
+            if plot_motion:
+                import matplotlib.pyplot as plt
+
+                data = np.array(np_raw_frame, dtype=np.int16)
+                numChirps = int(np.ceil(len(data) / 2 / numADCSamples / numRxAntennas))
+
+                # zero pad
+                zerostopad = int(numADCSamples * numChirps * numRxAntennas * 2 - len(data))
+                if zerostopad:
+                    data = np.concatenate([data, np.zeros((zerostopad,))])
+                # print('zeropad:', zerostopad)
+
+                # Organize data per RX
+                data = data.reshape(numRxAntennas * 2, -1, order='F')
+                data = data[0:4, :] + data[4:8, :] * 1j
+                data = data.T
+                data = data.reshape(numADCSamples, numChirps, numRxAntennas, order='F')
+                # data = np.fft.fft(data[:, :, 0])
+
+                if cnt == 1:
+
+                    mot_whole = np.zeros((md_plot_len * NPpF * int(1 / SweepTime)))
+                    mot_whole[-numChirps:] = np.sum(np.abs(data[:, :, 0]), 0)
+
+                    fig = plt.figure()
+                    ax = fig.add_subplot(1, 1, 1)
+                    mot = ax.plot(np.linspace(-md_plot_len, 0, len(mot_whole)), mot_whole)
+                    ax.set_xlabel('Time (sec)')
+                    ax.set_ylabel('Amplitude')
+                    ax.set_title('Live Motion Graph')
+                    ax.grid('both')
+                    plt.draw()
+                    plt.pause(1e-3)
+
+                else:
+                    if not plt.fignum_exists(1):
+                        sys.exit('Figure closed, hence stopped.')
+                    mot_whole[:-numChirps] = mot_whole[numChirps:]
+                    mot_whole[-numChirps:] = np.sum(np.abs(data[:, :, 0]), 0)
+                    print('frame: ', cnt)
+
+                    mot[0].set_ydata(mot_whole)
+                    ax.set_ylim([0, np.max(mot_whole)+1e5])
+                    plt.draw()
+                    plt.pause(1e-3)
+
 
     except KeyboardInterrupt:
         print('Stopped by keyboard interrupt')
