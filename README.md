@@ -1,5 +1,8 @@
 # AWR2243-linux-python
 
+
+## Quick Start Tutorial with Linux [YouTube Link](https://youtu.be/q4e_0xsQMmw)
+
 ## Steps for recording
 
 * `open_radar_setup_commands.txt` has the commands in order to record data (ignore 10th line: python ../../processing/main2.py)
